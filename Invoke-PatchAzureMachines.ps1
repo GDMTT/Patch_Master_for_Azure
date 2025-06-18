@@ -1,7 +1,12 @@
 param (
     [Parameter(Mandatory=$true)]
     [string]$ResourceGroupName,
+    [Parameter(Mandatory=$true)]
     [string]$ServerName,
+    [switch]$AssessOnly,
+    [switch]$InstallOnly,
+    [string]$MaximumDuration = 'PT1H',
+    [string]$RebootSetting = 'IfRequired',
     [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log"))
 )
 
@@ -69,19 +74,55 @@ try {
     $arc = Get-AzConnectedMachine -ResourceGroupName $ResourceGroupName -Name $ServerName -ErrorAction SilentlyContinue
 
     if ($null -ne $vm) {
+        $osType = $vm.StorageProfile.OSDisk.OSType
         $status = (Get-AzVM -ResourceGroupName $ResourceGroupName -Name $ServerName -Status).Statuses[1].DisplayStatus
-        $msg = "[Azure VM] Name: $($vm.Name) | Location: $($vm.Location) | Status: $status"
+        $msg = "[Azure VM] Name: $($vm.Name) | Location: $($vm.Location) | OS: $osType | Status: $status"
         Write-Log $msg 'Info' -ToConsole
-        # Place update logic for Azure VM here
+        if (-not $InstallOnly) {
+            Write-Log "Running patch assessment for Azure VM '$ServerName'..." 'Info' -ToConsole
+            $assessment = Invoke-AzVMPatchAssessment -ResourceGroupName $ResourceGroupName -VMName $ServerName -ErrorAction SilentlyContinue
+            Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
+        }
+        if (-not $AssessOnly) {
+            Write-Log "Installing patches on Azure VM '$ServerName'..." 'Info' -ToConsole
+            if ($osType -eq 'Windows') {
+                $install = Invoke-AzVMInstallPatch -ResourceGroupName $ResourceGroupName -VMName $ServerName -Windows -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ErrorAction SilentlyContinue
+            } elseif ($osType -eq 'Linux') {
+                $install = Invoke-AzVMInstallPatch -ResourceGroupName $ResourceGroupName -VMName $ServerName -Linux -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ErrorAction SilentlyContinue
+            } else {
+                Write-Log "Unknown OS type for VM '$ServerName'." 'Warn' -ToConsole
+            }
+            if ($null -ne $install) {
+                Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
+            }
+        }
     } elseif ($null -ne $arc) {
-        $msg = "[Azure Arc] Name: $($arc.Name) | Location: $($arc.Location) | OS: $($arc.OsType) | Status: $($arc.Status)"
+        $osType = $arc.OsType
+        $msg = "[Azure Arc] Name: $($arc.Name) | Location: $($arc.Location) | OS: $osType | Status: $($arc.Status)"
         Write-Log $msg 'Info' -ToConsole
-        # Place update logic for Azure Arc Connected Machine here
+        if (-not $InstallOnly) {
+            Write-Log "Running patch assessment for Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
+            $assessment = Invoke-AzConnectedAssessMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -ErrorAction SilentlyContinue
+            Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
+        }
+        if (-not $AssessOnly) {
+            Write-Log "Installing patches on Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
+            if ($osType -eq 'Windows') {
+                $install = Install-AzConnectedMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -Windows -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ErrorAction SilentlyContinue
+            } elseif ($osType -eq 'Linux') {
+                $install = Install-AzConnectedMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -Linux -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ErrorAction SilentlyContinue
+            } else {
+                Write-Log "Unknown OS type for Arc Connected Machine '$ServerName'." 'Warn' -ToConsole
+            }
+            if ($null -ne $install) {
+                Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
+            }
+        }
     } else {
         Write-Log "Server '$ServerName' not found as Azure VM or Azure Arc Connected Machine in resource group '$ResourceGroupName'." 'Warn' -ToConsole
     }
 } catch {
-    Write-Log "Error checking server '$ServerName': $($_.Exception.Message)" 'Error' -ToConsole
+    Write-Log "Error checking/updating server '$ServerName': $($_.Exception.Message)" 'Error' -ToConsole
     Write-Log "Full error: $_" 'Error'
 }
 # End of script
