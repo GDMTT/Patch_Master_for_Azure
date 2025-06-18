@@ -5,10 +5,14 @@ Azure Connected Machines that use Azure Arc.
 
 The script leverages the following Azure Powershell commands
 
+https://learn.microsoft.com/en-us/powershell/module/az.compute/invoke-azvmpatchassessment?view=azps-14.1.0
 Invoke-AzVMPatchAssessment
+https://learn.microsoft.com/en-us/powershell/module/az.compute/invoke-azvminstallpatch?view=azps-14.1.0
 Invoke-AzVMInstallPatch
 
+https://learn.microsoft.com/en-us/powershell/module/az.connectedmachine/invoke-azconnectedassessmachinepatch?view=azps-14.1.0
 Invoke-AzConnectedAssessMachinePatch
+https://learn.microsoft.com/en-us/powershell/module/az.connectedmachine/install-azconnectedmachinepatch?view=azps-14.1.0
 Install-AzConnectedMachinePatch
 
 To check if patches are avalilbe for installation and to install avalible patches for 
@@ -20,26 +24,18 @@ in a csv in serial or parallel mode.
 The scripts default action is to carry out the assesment and the install of updates. 
 Alternantively the script has parameters to carry out just an assement or an update.
 
-The script logs all activity to C:\programfiles\GDMTT\Logs\<scriptname>-<date stamp>.logs
-the logging must log the scripts actions the output from the powershell commands 
-and powershell errors.
+logging Requirements:
+- Log file default location C:\programfiles\GDMTT\Logs\<scriptname>-<date stamp>.logs
+- Logging format : <Time Stamp> <Server Name> <Log record type Info|Warn|Error> <log message>
+- the parameter LogFilePath provides the way users can change the location of thelog file.
+- the the script start the user account running the account should be logged.
+- the version of the AZ powershell module should be logged at startup
+- error should be human readable. If its a powershell error then the human readable 
+  should be first then the full error after it.
+- all actions need to be logged.   
+
+
 
 The script should be able to accept server details via the pipeline and 
 return results via the pipline
 
-the command line parameters
--ComputerName
--ResourceGroupName
--MaximumDuration <String>
--RebootSetting <String>
--LinuxParameterClassificationsToInclude
--LinuxParameterPackageNameMasksToExclude
--LinuxParameterPackageNameMasksToInclude <String[]>
--WindowParameterClassificationsToInclude <String[]>
--WindowParameterExcludeKbsRequiringReboot
--WindowParameterKbNumbersToExclude <String[]>
--WindowParameterKbNumbersToInclude <String[]>
--WindowParameterMaxPatchPublishDate <DateTime>
--MaxParrallel <int[] > if not provided all in the csv otherwise limit the total 
-  number of jobs running at one time to this value
-  
