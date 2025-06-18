@@ -1,0 +1,45 @@
+Specifications for Patch Master for Azure.
+
+The is is a script that is used to patch Virtual Machines Hosted in Azure and 
+Azure Connected Machines that use Azure Arc.
+
+The script leverages the following Azure Powershell commands
+
+Invoke-AzVMPatchAssessment
+Invoke-AzVMInstallPatch
+
+Invoke-AzConnectedAssessMachinePatch
+Install-AzConnectedMachinePatch
+
+To check if patches are avalilbe for installation and to install avalible patches for 
+both windows and linux Operating Systems.
+
+The script supports updating a single server, updating servers provided 
+in a csv in serial or parallel mode. 
+
+The scripts default action is to carry out the assesment and the install of updates. 
+Alternantively the script has parameters to carry out just an assement or an update.
+
+The script logs all activity to C:\programfiles\GDMTT\Logs\<scriptname>-<date stamp>.logs
+the logging must log the scripts actions the output from the powershell commands 
+and powershell errors.
+
+The script should be able to accept server details via the pipeline and 
+return results via the pipline
+
+the command line parameters
+-ComputerName
+-ResourceGroupName
+-MaximumDuration <String>
+-RebootSetting <String>
+-LinuxParameterClassificationsToInclude
+-LinuxParameterPackageNameMasksToExclude
+-LinuxParameterPackageNameMasksToInclude <String[]>
+-WindowParameterClassificationsToInclude <String[]>
+-WindowParameterExcludeKbsRequiringReboot
+-WindowParameterKbNumbersToExclude <String[]>
+-WindowParameterKbNumbersToInclude <String[]>
+-WindowParameterMaxPatchPublishDate <DateTime>
+-MaxParrallel <int[] > if not provided all in the csv otherwise limit the total 
+  number of jobs running at one time to this value
+  
