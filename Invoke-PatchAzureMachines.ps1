@@ -79,14 +79,19 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         $csv = $csv | Sort-Object {[int]($_.Order)}
     }
     foreach ($row in $csv) {
+        if (-not $row.ServerName -or -not $row.ResourceGroupName) {
+            Write-Log "Error: Missing ServerName or ResourceGroupName in CSV row. Skipping this row." 'Error' -ToConsole
+            continue
+        }
         $params = @{
             ResourceGroupName = $row.ResourceGroupName
             ServerName = $row.ServerName
-            MaximumDuration = $row.MaximumDuration
-            RebootSetting = $row.RebootSetting
-            WindowsClassificationsToInclude = if ($row.WindowsClassificationsToInclude) { $row.WindowsClassificationsToInclude -split ',' } else { $null }
-            LinuxClassificationsToInclude = if ($row.LinuxClassificationsToInclude) { $row.LinuxClassificationsToInclude -split ',' } else { $null }
         }
+        # Only add parameters if the value is not null or empty
+        if ($row.MaximumDuration) { $params.MaximumDuration = $row.MaximumDuration }
+        if ($row.RebootSetting) { $params.RebootSetting = $row.RebootSetting }
+        if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
+        if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
         # Determine action
         $action = $row.Action
         if ($action -eq 'AssessOnly') {
@@ -94,20 +99,19 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         } elseif ($action -eq 'InstallOnly') {
             $params.InstallOnly = $true
         }
-        # Remove nulls
-        $params = $params.GetEnumerator() | Where-Object { $_.Value } | ForEach-Object { @{ ($_.Key) = $_.Value } } | Merge-Hashtable
-        # Build argument string
-        $argList = $params.GetEnumerator() | ForEach-Object {
-            if ($_.Value -is [System.Collections.IEnumerable] -and -not ($_.Value -is [string])) {
-                $_.Value | ForEach-Object { "-${($_.Key)} '$_'" }
-            } elseif ($_.Value -is [switch]) {
-                if ($_.Value) { "-${($_.Key)}" }
-            } else {
-                "-${($_.Key)} '$($_.Value)'"
+        # Build argument list, only include non-null/empty
+        $argList = @()
+        foreach ($key in $params.Keys) {
+            $value = $params[$key]
+            if ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
+                foreach ($item in $value) { $argList += "-$key '$item'" }
+            } elseif ($value -is [switch]) {
+                if ($value) { $argList += "-$key" }
+            } elseif ($null -ne $value -and $value -ne '') {
+                $argList += "-$key '$value'"
             }
         }
         $argString = $argList -join ' '
-        # Call the script recursively for each server
         Write-Host "Processing server $($row.ServerName) in resource group $($row.ResourceGroupName) with args: $argString"
         & $PSCommandPath @argList
     }
@@ -116,7 +120,7 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
 
 # Ensure only one of -AssessOnly or -InstallOnly is specified
 if ($AssessOnly -and $InstallOnly) {
-    Write-Host "Error: Only one of -AssessOnly or -InstallOnly can be specified at a time." -ForegroundColor Red
+    Write-Log "Error: Only one of -AssessOnly or -InstallOnly can be specified at a time." -ToConsole
     exit 1
 }
 
@@ -210,7 +214,8 @@ try {
             } elseif ($osType -eq 'Linux') {
                 $install = Invoke-AzVMInstallPatch -ResourceGroupName $ResourceGroupName -VMName $ServerName -Linux -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ClassificationToIncludeForLinux $LinuxClassificationsToInclude -ErrorAction SilentlyContinue
             } else {
-                Write-Log "Unknown OS type for VM '$ServerName'." 'Warn' -ToConsole
+                Write-Log "Unknown OS type for VM '$ServerName'." 'Error' -ToConsole
+                exit 1
             }
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole

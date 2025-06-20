@@ -43,6 +43,8 @@ CSV columns:
 Order <The order in which the servers should be processed|if not provides processes in the order of the csv>
 ServerName <maps to -ServerName>
 ResourceGroupName <maps to -ResourceGroupName>
+
+if any of these columns in the row are blank then dont provide the parameter when calling the script so the the default is used
 Action <AssessOnly|InstallOnly | Blank or set to Both (run the default)>
 MaximumDuration <maps to -MaximumDuration>
 RebootSetting <maps to -RebootSetting>
