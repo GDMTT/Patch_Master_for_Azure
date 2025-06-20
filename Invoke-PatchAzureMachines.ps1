@@ -82,7 +82,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $server = $env:COMPUTERNAME
     $logLine = "$timestamp $server $Type $Message"
-    Add-Content -Path $LogFilePath -Value $logLine
+    Add-Content -Path $LogFilePath -Value $logLine -Encoding UTF8
     if ($ToConsole) {
         switch ($Type) {
             'Error' { Write-Error $logLine }
