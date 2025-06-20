@@ -1,18 +1,73 @@
+<#
+.SYNOPSIS
+    Assess and install patches on Azure VMs or Azure Arc Connected Machines.
+
+.DESCRIPTION
+    This script checks if a specified server is an Azure VM or Azure Arc Connected Machine, then performs patch assessment and/or installation using the appropriate Azure PowerShell commands. It supports both Windows and Linux OS types, allows classification filtering, and logs all actions and outputs.
+
+.PARAMETER ResourceGroupName
+    The name of the Azure Resource Group containing the server.
+
+.PARAMETER ServerName
+    The name of the Azure VM or Azure Arc Connected Machine to patch.
+
+.PARAMETER AssessOnly
+    If specified, only performs patch assessment (no installation).
+
+.PARAMETER InstallOnly
+    If specified, only installs patches (no assessment).
+
+.PARAMETER MaximumDuration
+    The maximum duration allowed for the patch operation (default: 'PT1H').
+
+.PARAMETER RebootSetting
+    The reboot setting for the patch operation (default: 'IfRequired').
+
+.PARAMETER WindowsClassificationsToInclude
+    Patch classifications to include for Windows (default: Critical, Security, UpdateRollup, ServicePack, Definition, Updates).
+    Valid options: Critical, Security, UpdateRollup, ServicePack, Definition, Updates, FeaturePack, Tools
+
+.PARAMETER LinuxClassificationsToInclude
+    Patch classifications to include for Linux (default: Critical, Security).
+    Valid options: Critical, Security, other
+
+.PARAMETER LogFilePath
+    The path to the log file. Defaults to C:\programfiles\GDMTT\Logs\Invoke-PatchAzureMachines-<date>.log
+
+.EXAMPLE
+    .\Invoke-PatchAzureMachines.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
+
+.NOTES
+    Author: Your Name
+    Date: 2025-06-19
+
+#>
+[CmdletBinding()]
 param (
     [Parameter(Mandatory=$true)]
     [string]$ResourceGroupName,
     [Parameter(Mandatory=$true)]
     [string]$ServerName,
-    [switch]$AssessOnly,
-    [switch]$InstallOnly,
-    [string]$MaximumDuration = 'PT1H',
-    [string]$RebootSetting = 'IfRequired',
+    [switch]$AssessOnly, # Only perform assessment
+    [switch]$InstallOnly, # Only perform installation
+    [string]$MaximumDuration = 'PT1H', # Max duration for patching
+    [string]$RebootSetting = 'IfRequired', # Reboot setting for patching
     [ValidateSet("Critical","Security","UpdateRollup","ServicePack","Definition","Updates","FeaturePack","Tools")][string[]]$WindowsClassificationsToInclude = @("Critical","Security","UpdateRollup","ServicePack","Definition","Updates"),
     [ValidateSet("Critical","Security","other")][string[]]$LinuxClassificationsToInclude = @("Critical","Security"),
     [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log"))
 )
 
 function Write-Log {
+    <#
+    .SYNOPSIS
+        Write a log entry to the log file and optionally to the console.
+    .PARAMETER Message
+        The log message.
+    .PARAMETER Type
+        The log type: Info, Warn, or Error.
+    .PARAMETER ToConsole
+        If set, also writes to the console.
+    #>
     param (
         [string]$Message,
         [ValidateSet('Info','Warn','Error')][string]$Type = 'Info',
