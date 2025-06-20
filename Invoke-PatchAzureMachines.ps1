@@ -42,20 +42,77 @@
     Date: 2025-06-19
 
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName='SingleServer')]
 param (
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$true, ParameterSetName='SingleServer')]
     [string]$ResourceGroupName,
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$true, ParameterSetName='SingleServer')]
     [string]$ServerName,
+    [Parameter(ParameterSetName='SingleServer')]
     [switch]$AssessOnly, # Only perform assessment
+    [Parameter(ParameterSetName='SingleServer')]
     [switch]$InstallOnly, # Only perform installation
+    [Parameter(ParameterSetName='SingleServer')]
     [string]$MaximumDuration = 'PT1H', # Max duration for patching
+    [Parameter(ParameterSetName='SingleServer')]
     [string]$RebootSetting = 'IfRequired', # Reboot setting for patching
+    [Parameter(ParameterSetName='SingleServer')]
     [ValidateSet("Critical","Security","UpdateRollup","ServicePack","Definition","Updates","FeaturePack","Tools")][string[]]$WindowsClassificationsToInclude = @("Critical","Security","UpdateRollup","ServicePack","Definition","Updates"),
+    [Parameter(ParameterSetName='SingleServer')]
     [ValidateSet("Critical","Security","other")][string[]]$LinuxClassificationsToInclude = @("Critical","Security"),
-    [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log"))
+    [Parameter(ParameterSetName='SingleServer')]
+    [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log")),
+
+    [Parameter(Mandatory=$true, ParameterSetName='CSV')]
+    [string]$CSVPath
 )
+
+# CSV Mode: process each server in the CSV by calling this script recursively
+if ($PSCmdlet.ParameterSetName -eq 'CSV') {
+    if (-not (Test-Path $CSVPath)) {
+        Write-Host "CSV file not found: $CSVPath" -ForegroundColor Red
+        exit 1
+    }
+    $csv = Import-Csv -Path $CSVPath
+    # If Order column exists, sort by it (numeric), else process as is
+    if ($csv | Get-Member -Name 'Order' -MemberType NoteProperty) {
+        $csv = $csv | Sort-Object {[int]($_.Order)}
+    }
+    foreach ($row in $csv) {
+        $params = @{
+            ResourceGroupName = $row.ResourceGroupName
+            ServerName = $row.ServerName
+            MaximumDuration = $row.MaximumDuration
+            RebootSetting = $row.RebootSetting
+            WindowsClassificationsToInclude = if ($row.WindowsClassificationsToInclude) { $row.WindowsClassificationsToInclude -split ',' } else { $null }
+            LinuxClassificationsToInclude = if ($row.LinuxClassificationsToInclude) { $row.LinuxClassificationsToInclude -split ',' } else { $null }
+        }
+        # Determine action
+        $action = $row.Action
+        if ($action -eq 'AssessOnly') {
+            $params.AssessOnly = $true
+        } elseif ($action -eq 'InstallOnly') {
+            $params.InstallOnly = $true
+        }
+        # Remove nulls
+        $params = $params.GetEnumerator() | Where-Object { $_.Value } | ForEach-Object { @{ ($_.Key) = $_.Value } } | Merge-Hashtable
+        # Build argument string
+        $argList = $params.GetEnumerator() | ForEach-Object {
+            if ($_.Value -is [System.Collections.IEnumerable] -and -not ($_.Value -is [string])) {
+                $_.Value | ForEach-Object { "-${($_.Key)} '$_'" }
+            } elseif ($_.Value -is [switch]) {
+                if ($_.Value) { "-${($_.Key)}" }
+            } else {
+                "-${($_.Key)} '$($_.Value)'"
+            }
+        }
+        $argString = $argList -join ' '
+        # Call the script recursively for each server
+        Write-Host "Processing server $($row.ServerName) in resource group $($row.ResourceGroupName) with args: $argString"
+        & $PSCommandPath @argList
+    }
+    exit 0
+}
 
 # Ensure only one of -AssessOnly or -InstallOnly is specified
 if ($AssessOnly -and $InstallOnly) {
