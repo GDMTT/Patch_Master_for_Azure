@@ -1,59 +1,56 @@
-Specifications for Patch Master for Azure.
+Specifications for Patch Master for Azure
 
-The is is a script that is used to patch Virtual Machines Hosted in Azure and 
-Azure Connected Machines that use Azure Arc.
+This script automates patch assessment and installation for Azure Virtual Machines and Azure Arc Connected Machines (Windows and Linux) using Azure PowerShell commands.
 
-The script leverages the following Azure Powershell commands
+Supported Azure PowerShell commands:
+- Invoke-AzVMPatchAssessment
+- Invoke-AzVMInstallPatch
+- Invoke-AzConnectedAssessMachinePatch
+- Install-AzConnectedMachinePatch
 
-https://learn.microsoft.com/en-us/powershell/module/az.compute/invoke-azvmpatchassessment?view=azps-14.1.0
-Invoke-AzVMPatchAssessment
-https://learn.microsoft.com/en-us/powershell/module/az.compute/invoke-azvminstallpatch?view=azps-14.1.0
-Invoke-AzVMInstallPatch
+Key Features:
+- Supports both single server and batch (CSV) processing.
+- Batch mode can run serially or in parallel (with -Jobs and optional -MaxJobs for concurrency control).
+- Each parallel job writes to a unique log file: Job<Number>_<ServerName>-<date>.log.
+- Supports patching for both Windows and Linux OS types.
+- Allows filtering by patch classification for both Windows and Linux.
+- Default action is to assess and install patches; can be overridden to assess only or install only.
+- All actions, errors, and key events are logged with timestamps and server names.
+- Logs include user and Az PowerShell module version at startup.
+- Human-readable errors are logged, followed by full error details.
+- Accepts server details via pipeline (future enhancement) and returns results via pipeline (future enhancement).
 
-https://learn.microsoft.com/en-us/powershell/module/az.connectedmachine/invoke-azconnectedassessmachinepatch?view=azps-14.1.0
-Invoke-AzConnectedAssessMachinePatch
-https://learn.microsoft.com/en-us/powershell/module/az.connectedmachine/install-azconnectedmachinepatch?view=azps-14.1.0
-Install-AzConnectedMachinePatch
+Parameter Sets:
+- Single server mode: specify -ResourceGroupName and -ServerName.
+- CSV mode: specify -CSVPath (cannot be used with -ResourceGroupName or -ServerName).
 
-To check if patches are avalilbe for installation and to install avalible patches for 
-both windows and linux Operating Systems.
+CSV Columns:
+- Order: (optional) The order in which servers are processed. If not present, processes in file order.
+- ServerName: (required) Maps to -ServerName.
+- ResourceGroupName: (required) Maps to -ResourceGroupName.
+- Action: (optional) AssessOnly | InstallOnly | Both/blank (default: assess and install).
+- MaximumDuration: (optional) Maps to -MaximumDuration.
+- RebootSetting: (optional) Maps to -RebootSetting.
+- WindowsClassificationsToInclude: (optional) Maps to -WindowsClassificationsToInclude.
+- LinuxClassificationsToInclude: (optional) Maps to -LinuxClassificationsToInclude.
 
-The script supports updating a single server, updating servers provided 
-in a csv in serial or parallel mode. 
+CSV Processing:
+- If ServerName or ResourceGroupName is missing in a row, the row is skipped and an error is logged.
+- If Action, MaximumDuration, RebootSetting, WindowsClassificationsToInclude, or LinuxClassificationsToInclude are blank, the script's default is used.
+- In parallel mode, the script calls itself as a job for each server, monitors all jobs, and waits for completion.
+- If -MaxJobs is set, limits the number of concurrent jobs.
 
-The scripts default action is to carry out the assesment and the install of updates. 
-Alternantively the script has parameters to carry out just an assement or an update.
+Logging Requirements:
+- Default log location: C:\programfiles\GDMTT\Logs\<scriptname>-<date>.log
+- Parallel jobs: C:\programfiles\GDMTT\Logs\Invoke-PatchAzureMachines-Job<Number>_<ServerName>-<date>.log
+- Log format: <Time Stamp> <Server Name> <Log record type Info|Warn|Error> <log message>
+- Log file path can be overridden with -LogFilePath.
+- Logs user and Az PowerShell module version at startup.
+- All actions and errors are logged, with human-readable and full error details.
 
-logging Requirements:
-- Log file default location C:\programfiles\GDMTT\Logs\<scriptname>-<date stamp>.logs
-- Logging format : <Time Stamp> <Server Name> <Log record type Info|Warn|Error> <log message>
-- the parameter LogFilePath provides the way users can change the location of thelog file.
-- the the script start the user account running the account should be logged.
-- the version of the AZ powershell module should be logged at startup
-- error should be human readable. If its a powershell error then the human readable 
-  should be first then the full error after it.
-- all actions need to be logged.   
-
-
-
-The script should be able to accept server details via the pipeline and 
-return results via the pipline
-
-CSV columns:
-Order <The order in which the servers should be processed|if not provides processes in the order of the csv>
-ServerName <maps to -ServerName>
-ResourceGroupName <maps to -ResourceGroupName>
-
-if any of these columns in the row are blank then dont provide the parameter when calling the script so the the default is used
-Action <AssessOnly|InstallOnly | Blank or set to Both (run the default)>
-MaximumDuration <maps to -MaximumDuration>
-RebootSetting <maps to -RebootSetting>
-WindowsClassificationsToInclude <maps to -WindowsClassificationsToInclude> 
-LinuxClassificationsToInclude <maps to -LinuxClassificationsToInclude>
-
-If the paramter Jobs is present then the cvs content will be processed in parallel.
-the script should call itself as a job and run a loop that monitors the jobs until all have completed. 
-The Job name should include the server name. 
-If Jobs and MaxJobs are present then the name of jobs running at the same time are limited to the number set via MaxJobs.
+Examples:
+- Single server: .\Invoke-PatchAzureMachines.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
+- Batch CSV: .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv
+- Parallel jobs: .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
 
 
