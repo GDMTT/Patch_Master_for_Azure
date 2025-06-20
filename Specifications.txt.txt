@@ -50,3 +50,10 @@ MaximumDuration <maps to -MaximumDuration>
 RebootSetting <maps to -RebootSetting>
 WindowsClassificationsToInclude <maps to -WindowsClassificationsToInclude> 
 LinuxClassificationsToInclude <maps to -LinuxClassificationsToInclude>
+
+If the paramter Jobs is present then the cvs content will be processed in parallel.
+the script should call itself as a job and run a loop that monitors the jobs until all have completed. 
+The Job name should include the server name. 
+If Jobs and MaxJobs are present then the name of jobs running at the same time are limited to the number set via MaxJobs.
+
+

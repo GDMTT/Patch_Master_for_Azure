@@ -64,7 +64,12 @@ param (
     [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log")),
 
     [Parameter(Mandatory=$true, ParameterSetName='CSV')]
-    [string]$CSVPath
+    [string]$CSVPath,
+
+    [Parameter(ParameterSetName='CSV')]
+    [switch]$Jobs,
+    [Parameter(ParameterSetName='CSV')]
+    [int]$MaxJobs
 )
 
 # CSV Mode: process each server in the CSV by calling this script recursively
@@ -78,6 +83,8 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
     if ($csv | Get-Member -Name 'Order' -MemberType NoteProperty) {
         $csv = $csv | Sort-Object {[int]($_.Order)}
     }
+    $jobsList = @()
+    $jobCount = 0
     foreach ($row in $csv) {
         if (-not $row.ServerName -or -not $row.ResourceGroupName) {
             Write-Log "Error: Missing ServerName or ResourceGroupName in CSV row. Skipping this row." 'Error' -ToConsole
@@ -87,19 +94,16 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
             ResourceGroupName = $row.ResourceGroupName
             ServerName = $row.ServerName
         }
-        # Only add parameters if the value is not null or empty
         if ($row.MaximumDuration) { $params.MaximumDuration = $row.MaximumDuration }
         if ($row.RebootSetting) { $params.RebootSetting = $row.RebootSetting }
         if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
         if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
-        # Determine action
         $action = $row.Action
         if ($action -eq 'AssessOnly') {
             $params.AssessOnly = $true
         } elseif ($action -eq 'InstallOnly') {
             $params.InstallOnly = $true
         }
-        # Build argument list, only include non-null/empty
         $argList = @()
         foreach ($key in $params.Keys) {
             $value = $params[$key]
@@ -112,8 +116,31 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
             }
         }
         $argString = $argList -join ' '
-        Write-Host "Processing server $($row.ServerName) in resource group $($row.ResourceGroupName) with args: $argString"
-        & $PSCommandPath @argList
+        if ($Jobs) {
+            # If MaxJobs is set, wait until number of running jobs is less than MaxJobs
+            while ($MaxJobs -and ($jobsList | Where-Object { $_.State -eq 'Running' }).Count -ge $MaxJobs) {
+                Start-Sleep -Seconds 2
+            }
+            $jobName = "PatchJob-$($row.ServerName)"
+            Write-Log "Starting job: $jobName with args: $argString" 'Info' -ToConsole
+            $job = Start-Job -Name $jobName -ScriptBlock {
+                param($scriptPath, $args)
+                & $scriptPath @args
+            } -ArgumentList $PSCommandPath, $argList
+            $jobsList += $job
+        } else {
+            Write-Log "Processing server $($row.ServerName) in resource group $($row.ResourceGroupName) with args: $argString" 'Info' -ToConsole
+            & $PSCommandPath @argList
+        }
+    }
+    # Monitor jobs if Jobs is set
+    if ($Jobs -and $jobsList.Count -gt 0) {
+        Write-Log "Waiting for all jobs to complete..." 'Info' -ToConsole
+        while (($jobsList | Where-Object { $_.State -eq 'Running' }).Count -gt 0) {
+            Start-Sleep -Seconds 5
+        }
+        $jobsList | Receive-Job -Wait | Out-Null
+        Write-Log "All jobs completed." 'Info' -ToConsole
     }
     exit 0
 }
