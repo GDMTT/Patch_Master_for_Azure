@@ -39,3 +39,12 @@ logging Requirements:
 The script should be able to accept server details via the pipeline and 
 return results via the pipline
 
+CSV columns:
+Order <The order in which the servers should be processed|if not provides processes in the order of the csv>
+ServerName <maps to -ServerName>
+ResourceGroupName <maps to -ResourceGroupName>
+Action <AssessOnly|InstallOnly | Blank or set to Both (run the default)>
+MaximumDuration <maps to -MaximumDuration>
+RebootSetting <maps to -RebootSetting>
+WindowsClassificationsToInclude <maps to -WindowsClassificationsToInclude> 
+LinuxClassificationsToInclude <maps to -LinuxClassificationsToInclude>
