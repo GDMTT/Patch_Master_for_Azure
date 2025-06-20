@@ -183,7 +183,10 @@ try {
         }
     } else {
         Write-Log "Server '$ServerName' not found as Azure VM or Azure Arc Connected Machine in resource group '$ResourceGroupName'." 'Warn' -ToConsole
+        exit 1
     }
+    Write-Log "Patch operation completed successfully for server '$ServerName'." 'Info'
+
 } catch {
     Write-Log "Error checking/updating server '$ServerName': $($_.Exception.Message)" 'Error' -ToConsole
     Write-Log "Full error: $_" 'Error'
