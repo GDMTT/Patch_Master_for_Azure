@@ -57,6 +57,12 @@ param (
     [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log"))
 )
 
+# Ensure only one of -AssessOnly or -InstallOnly is specified
+if ($AssessOnly -and $InstallOnly) {
+    Write-Host "Error: Only one of -AssessOnly or -InstallOnly can be specified at a time." -ForegroundColor Red
+    exit 1
+}
+
 function Write-Log {
     <#
     .SYNOPSIS
