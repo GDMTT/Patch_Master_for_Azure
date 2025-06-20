@@ -1,0 +1,82 @@
+Test Plan for Invoke-PatchAzureMachines.ps1
+============================================
+
+Objective:
+----------
+To verify the correct functionality, error handling, logging, and parameter support of the Invoke-PatchAzureMachines.ps1 script for both single server and batch (CSV) patching scenarios, including parallel job execution.
+
+Test Environment:
+-----------------
+- Azure subscription with test VMs (Windows and Linux) and Azure Arc Connected Machines
+- PowerShell 7.x or Windows PowerShell 5.1+
+- Az PowerShell module installed
+- Test workspace with script and log directory
+
+Test Cases:
+-----------
+
+1. **Single Server - Default (Assess and Install)**
+   - Run script with -ResourceGroupName and -ServerName for a Windows VM
+   - Run script with -ResourceGroupName and -ServerName for a Linux VM
+   - Verify assessment and install are performed, logs are created, and output is correct
+
+2. **Single Server - Assess Only**
+   - Run script with -ResourceGroupName, -ServerName, and -AssessOnly
+   - Verify only assessment is performed, no install
+
+3. **Single Server - Install Only**
+   - Run script with -ResourceGroupName, -ServerName, and -InstallOnly
+   - Verify only install is performed, no assessment
+
+4. **Single Server - Classification Filtering**
+   - Run script with -WindowsClassificationsToInclude or -LinuxClassificationsToInclude
+   - Verify only specified classifications are processed
+
+5. **Single Server - Custom Log File Path**
+   - Run script with -LogFilePath
+   - Verify log is written to specified location
+
+6. **Parameter Validation**
+   - Run script with both -AssessOnly and -InstallOnly (should error and exit)
+   - Run script with missing -ResourceGroupName or -ServerName (should error and exit)
+
+7. **CSV Batch - Serial Processing**
+   - Prepare CSV with multiple servers (Windows, Linux, Arc)
+   - Run script with -CSVPath
+   - Verify each server is processed in order, logs are created, and results are correct
+
+8. **CSV Batch - Parallel Processing**
+   - Run script with -CSVPath and -Jobs
+   - Verify jobs run in parallel, each with unique log file
+   - Run with -MaxJobs to limit concurrency and verify job throttling
+
+9. **CSV Batch - Error Handling**
+   - Include rows with missing ServerName or ResourceGroupName
+   - Verify errors are logged and those rows are skipped
+   - Include blank/invalid values for optional columns and verify defaults are used
+
+10. **Logging Verification**
+    - Check log format, content, and rotation for both single and batch modes
+    - Verify user and Az module version are logged at startup
+    - Verify all actions and errors are logged as specified
+
+11. **Edge Cases**
+    - Empty CSV file
+    - CSV with only headers
+    - Large CSV file (stress test parallel jobs)
+    - Invalid parameter values (e.g., invalid classification)
+
+12. **Pipeline Support (Future/Optional)**
+    - Test passing server objects via pipeline (if/when implemented)
+
+Test Data:
+----------
+- Sample Windows and Linux VMs and Arc machines
+- Sample CSV files with various combinations of valid and invalid data
+
+Expected Results:
+-----------------
+- All test cases should pass as per the script's specifications
+- Errors and edge cases should be handled gracefully and logged
+- Logs should be complete, accurate, and in the correct format
+
