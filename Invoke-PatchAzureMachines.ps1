@@ -1,21 +1,21 @@
 <#
 .SYNOPSIS
-    Assess and install patches on Azure VMs or Azure Arc Connected Machines.
+    Assess and install patches on Azure VMs or Azure Arc Connected Machines, supporting single server or batch CSV processing (including parallel jobs).
 
 .DESCRIPTION
-    This script checks if a specified server is an Azure VM or Azure Arc Connected Machine, then performs patch assessment and/or installation using the appropriate Azure PowerShell commands. It supports both Windows and Linux OS types, allows classification filtering, and logs all actions and outputs.
+    This script checks if a specified server is an Azure VM or Azure Arc Connected Machine, then performs patch assessment and/or installation using the appropriate Azure PowerShell commands. It supports both Windows and Linux OS types, allows classification filtering, and logs all actions and outputs. The script can process a single server or a batch of servers from a CSV file. When using a CSV, jobs can be run in parallel, each with a unique log file.
 
 .PARAMETER ResourceGroupName
-    The name of the Azure Resource Group containing the server.
+    The name of the Azure Resource Group containing the server. Used in single server mode.
 
 .PARAMETER ServerName
-    The name of the Azure VM or Azure Arc Connected Machine to patch.
+    The name of the Azure VM or Azure Arc Connected Machine to patch. Used in single server mode.
 
 .PARAMETER AssessOnly
-    If specified, only performs patch assessment (no installation).
+    If specified, only performs patch assessment (no installation). Cannot be used with InstallOnly.
 
 .PARAMETER InstallOnly
-    If specified, only installs patches (no assessment).
+    If specified, only installs patches (no assessment). Cannot be used with AssessOnly.
 
 .PARAMETER MaximumDuration
     The maximum duration allowed for the patch operation (default: 'PT1H').
@@ -32,14 +32,29 @@
     Valid options: Critical, Security, other
 
 .PARAMETER LogFilePath
-    The path to the log file. Defaults to C:\programfiles\GDMTT\Logs\Invoke-PatchAzureMachines-<date>.log
+    The path to the log file. Defaults to C:\programfiles\GDMTT\Logs\Invoke-PatchAzureMachines-<date>.log. In parallel CSV mode, each job gets a unique log file with Job<Number>_<ServerName> in the name.
+
+.PARAMETER CSVPath
+    Path to a CSV file containing server patching instructions. If specified, ResourceGroupName and ServerName cannot be used. The CSV columns are: Order, ServerName, ResourceGroupName, Action, MaximumDuration, RebootSetting, WindowsClassificationsToInclude, LinuxClassificationsToInclude.
+
+.PARAMETER Jobs
+    If specified with CSVPath, processes servers in parallel jobs. Each job has a unique log file.
+
+.PARAMETER MaxJobs
+    If specified with Jobs, limits the number of concurrent jobs to this value.
 
 .EXAMPLE
     .\Invoke-PatchAzureMachines.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
 
+.EXAMPLE
+    .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv
+
+.EXAMPLE
+    .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
+
 .NOTES
     Author: Your Name
-    Date: 2025-06-19
+    Date: 2025-06-20
 
 #>
 [CmdletBinding(DefaultParameterSetName='SingleServer')]
@@ -86,14 +101,17 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
     $jobsList = @()
     $jobCount = 0
     foreach ($row in $csv) {
+        # Skip rows missing required columns
         if (-not $row.ServerName -or -not $row.ResourceGroupName) {
             Write-Log "Error: Missing ServerName or ResourceGroupName in CSV row. Skipping this row." 'Error' -ToConsole
             continue
         }
+        # Prepare parameters for each server
         $params = @{
             ResourceGroupName = $row.ResourceGroupName
             ServerName = $row.ServerName
         }
+        # Only add parameters if the value is not null or empty
         if ($row.MaximumDuration) { $params.MaximumDuration = $row.MaximumDuration }
         if ($row.RebootSetting) { $params.RebootSetting = $row.RebootSetting }
         if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
@@ -104,6 +122,7 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         } elseif ($action -eq 'InstallOnly') {
             $params.InstallOnly = $true
         }
+        # Build argument list for recursive call
         $argList = @()
         foreach ($key in $params.Keys) {
             $value = $params[$key]
@@ -117,12 +136,13 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         }
         $argString = $argList -join ' '
         if ($Jobs) {
-            # If MaxJobs is set, wait until number of running jobs is less than MaxJobs
-            while ($MaxJobs -and ($jobsList | Where-Object { $_.State -eq 'Running' }).Count -ge $MaxJobs) {
-                Start-Sleep -Seconds 2
-            }
-            $jobName = "PatchJob-$($row.ServerName)"
-            Write-Log "Starting job: $jobName with args: $argString" 'Info' -ToConsole
+            # In parallel mode, assign a unique log file for each job
+            $jobCount++
+            $jobName = "PatchJob-$jobCount-$($row.ServerName)"
+            $jobLogFile = Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
+            $argList = $argList | Where-Object { $_ -notlike "-LogFilePath*" }
+            $argList += "-LogFilePath '$jobLogFile'"
+            Write-Log "Starting job: $jobName with args: $argString and log file: $jobLogFile" 'Info' -ToConsole
             $job = Start-Job -Name $jobName -ScriptBlock {
                 param($scriptPath, $args)
                 & $scriptPath @args
