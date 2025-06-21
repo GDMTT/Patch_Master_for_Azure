@@ -209,7 +209,7 @@ if (-not (Test-Path $logDir)) {
 Write-Log "Script started by user: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)" 'Info' -ToConsole
 
 # Requires Az module
-if (-not (Get-Module -ListAvailable -Name Az)) {
+if (-not (Get-InstalledModule -Name Az)) {
     Write-Log "Az module is not installed. Please install it using 'Install-Module -Name Az -Scope CurrentUser'." 'Error' -ToConsole
     exit 1
 }
