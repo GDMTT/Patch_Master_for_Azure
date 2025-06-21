@@ -32,7 +32,7 @@
     Valid options: Critical, Security, other
 
 .PARAMETER LogFilePath
-    The path to the log file. Defaults to C:\programfiles\GDMTT\Logs\Invoke-PatchAzureMachines-<date>.log. In parallel CSV mode, each job gets a unique log file with Job<Number>_<ServerName> in the name.
+    The path to the log file. Defaults to C:\ProgramData\GDMTT\Logs\Invoke-PatchAzureMachines-<date>.log. In parallel CSV mode, each job gets a unique log file with Job<Number>_<ServerName> in the name.
 
 .PARAMETER CSVPath
     Path to a CSV file containing server patching instructions. If specified, ResourceGroupName and ServerName cannot be used. The CSV columns are: Order, ServerName, ResourceGroupName, Action, MaximumDuration, RebootSetting, WindowsClassificationsToInclude, LinuxClassificationsToInclude.
@@ -76,7 +76,7 @@ param (
     [Parameter(ParameterSetName='SingleServer')]
     [ValidateSet("Critical","Security","other")][string[]]$LinuxClassificationsToInclude = @("Critical","Security"),
     [Parameter(ParameterSetName='SingleServer')]
-    [string]$LogFilePath = $(Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log")),
+    [string]$LogFilePath = $(Join-Path -Path 'C:\ProgramData\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-$(Get-Date -Format 'yyyyMMdd').log")),
 
     [Parameter(Mandatory=$true, ParameterSetName='CSV')]
     [string]$CSVPath,
@@ -139,7 +139,7 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
             # In parallel mode, assign a unique log file for each job
             $jobCount++
             $jobName = "PatchJob-$jobCount-$($row.ServerName)"
-            $jobLogFile = Join-Path -Path 'C:\programfiles\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
+            $jobLogFile = Join-Path -Path 'C:\ProgramData\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
             $argList = $argList | Where-Object { $_ -notlike "-LogFilePath*" }
             $argList += "-LogFilePath '$jobLogFile'"
             Write-Log "Starting job: $jobName with args: $argString and log file: $jobLogFile" 'Info' -ToConsole
@@ -214,7 +214,7 @@ if (-not (Get-InstalledModule -Name Az)) {
     exit 1
 }
 
-Import-Module Az
+Import-Module Az -ErrorAction Stop | Out-Null # Import the Az module silently. lots of warnings can be ignored
 $azVersion = (Get-Module -Name Az | Select-Object -First 1).Version
 Write-Log "Az PowerShell module version: $azVersion" 'Info' -ToConsole
 
@@ -253,6 +253,11 @@ try {
             Write-Log "Running patch assessment for Azure VM '$ServerName'..." 'Info' -ToConsole
             $assessment = Invoke-AzVMPatchAssessment -ResourceGroupName $ResourceGroupName -VMName $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
+            if ($assessment.Status -eq 'Succeeded') {
+                Write-Log "Patch assessment succeeded for Azure VM '$ServerName'." 'Info' -ToConsole
+            } else {
+                Write-Log "Patch assessment failed for Azure VM '$ServerName'. Status: $($assessment.Status)" 'Error' -ToConsole
+            }
         }
         if (-not $AssessOnly) {
             Write-Log "Installing patches on Azure VM '$ServerName'..." 'Info' -ToConsole
@@ -266,6 +271,11 @@ try {
             }
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
+                if ($install.Status -eq 'Succeeded') {
+                    Write-Log "Patch install succeeded for Azure VM '$ServerName'." 'Info' -ToConsole
+                } else {
+                    Write-Log "Patch install failed for Azure VM '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
+                }
             }
         }
     } elseif ($null -ne $arc) {
@@ -276,6 +286,11 @@ try {
             Write-Log "Running patch assessment for Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
             $assessment = Invoke-AzConnectedAssessMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
+            if ($assessment.Status -eq 'Succeeded') {
+                Write-Log "Patch assessment succeeded for Azure Arc Connected Machine '$ServerName'." 'Info' -ToConsole
+            } else {
+                Write-Log "Patch assessment failed for Azure Arc Connected Machine '$ServerName'. Status: $($assessment.Status)" 'Error' -ToConsole
+            }
         }
         if (-not $AssessOnly) {
             Write-Log "Installing patches on Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
@@ -288,6 +303,11 @@ try {
             }
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
+                if ($install.Status -eq 'Succeeded') {
+                    Write-Log "Patch install succeeded for Azure Arc Connected Machine '$ServerName'." 'Info' -ToConsole
+                } else {
+                    Write-Log "Patch install failed for Azure Arc Connected Machine '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
+                }
             }
         }
     } else {
