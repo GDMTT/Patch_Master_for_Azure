@@ -171,11 +171,15 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         foreach ($key in $params.Keys) {
             $value = $params[$key]
             if ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
-                foreach ($item in $value) { $argList += "-$key '$item'" }
+                foreach ($item in $value) {
+                    $argList += "-$key"
+                    $argList += $item
+                }
             } elseif ($value -is [switch]) {
                 if ($value) { $argList += "-$key" }
             } elseif ($null -ne $value -and $value -ne '') {
-                $argList += "-$key '$value'"
+                $argList += "-$key"
+                $argList += $value
             }
         }
         $argString = $argList -join ' '
