@@ -161,11 +161,11 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
         if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
         $action = $row.Action
-        if ($action -eq 'AssessOnly') {
-            $params.AssessOnly = $true
-        } elseif ($action -eq 'InstallOnly') {
-            $params.InstallOnly = $true
-        }
+            if ($action -eq 'AssessOnly') {
+                $params.AssessOnly = $true
+            } elseif ($action -eq 'InstallOnly') {
+                $params.InstallOnly = $true
+            }
         # Build argument list for recursive call
         $argList = @()
         foreach ($key in $params.Keys) {
