@@ -37,6 +37,21 @@
 .PARAMETER CSVPath
     Path to a CSV file containing server patching instructions. If specified, ResourceGroupName and ServerName cannot be used. The CSV columns are: Order, ServerName, ResourceGroupName, Action, MaximumDuration, RebootSetting, WindowsClassificationsToInclude, LinuxClassificationsToInclude.
 
+.CSV FORMAT
+    To use batch mode, create a CSV file with the following header and sample row:
+
+        Order,ServerName,ResourceGroupName,Action,MaximumDuration,RebootSetting,WindowsClassificationsToInclude,LinuxClassificationsToInclude
+        1,MyServer,MyResourceGroup,InstallOnly,PT1H,IfRequired,"Critical,Security,Updates","Critical,Security"
+
+    - Order: (optional) Numeric order for processing
+    - ServerName: Name of the VM or Arc Connected Machine
+    - ResourceGroupName: Name of the resource group
+    - Action: AssessOnly or InstallOnly
+    - MaximumDuration: (optional) e.g. PT1H
+    - RebootSetting: (optional) e.g. IfRequired
+    - WindowsClassificationsToInclude: (optional) Comma-separated list
+    - LinuxClassificationsToInclude: (optional) Comma-separated list
+
 .PARAMETER Jobs
     If specified with CSVPath, processes servers in parallel jobs. Each job has a unique log file.
 
