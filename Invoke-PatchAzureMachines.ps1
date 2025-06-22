@@ -214,9 +214,9 @@ if (-not (Get-InstalledModule -Name Az)) {
     exit 1
 }
 
-Import-Module Az -ErrorAction Stop | Out-Null # Import the Az module silently. lots of warnings can be ignored
-$azVersion = (Get-Module -Name Az | Select-Object -First 1).Version
-Write-Log "Az PowerShell module version: $azVersion" 'Info' -ToConsole
+#Import-Module Az -ErrorAction Stop | Out-Null # Import the Az module silently. lots of warnings can be ignored
+#$azVersion = (Get-Module -Name Az | Select-Object -First 1).Version
+#Write-Log "Az PowerShell module version: $azVersion" 'Info' -ToConsole
 
 # Check if the user is logged in to Azure, if not, prompt for login
 try {
