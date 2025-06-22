@@ -254,7 +254,11 @@ try {
             $assessment = Invoke-AzVMPatchAssessment -ResourceGroupName $ResourceGroupName -VMName $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
             if ($assessment.Status -eq 'Succeeded') {
-                Write-Log "Patch assessment succeeded for Azure VM '$ServerName'." 'Info' -ToConsole
+                if ($assessment.Error) {
+                    Write-Log "Patch assessment succeeded for Azure VM '$ServerName' but with warning: $($assessment.Error)" 'Warn' -ToConsole
+                } else {
+                    Write-Log "Patch assessment succeeded for Azure VM '$ServerName'." 'Info' -ToConsole
+                }
             } else {
                 Write-Log "Patch assessment failed for Azure VM '$ServerName'. Status: $($assessment.Status)" 'Error' -ToConsole
             }
@@ -272,7 +276,11 @@ try {
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
                 if ($install.Status -eq 'Succeeded') {
-                    Write-Log "Patch install succeeded for Azure VM '$ServerName'." 'Info' -ToConsole
+                    if ($install.Error) {
+                        Write-Log "Patch install succeeded for Azure VM '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
+                    } else {
+                        Write-Log "Patch install succeeded for Azure VM '$ServerName'." 'Info' -ToConsole
+                    }
                 } else {
                     Write-Log "Patch install failed for Azure VM '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
                 }
@@ -287,7 +295,11 @@ try {
             $assessment = Invoke-AzConnectedAssessMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
             if ($assessment.Status -eq 'Succeeded') {
-                Write-Log "Patch assessment succeeded for Azure Arc Connected Machine '$ServerName'." 'Info' -ToConsole
+                if ($assessment.Error) {
+                    Write-Log "Patch assessment succeeded for Azure Arc Connected Machine '$ServerName' but with warning: $($assessment.Error)" 'Warn' -ToConsole
+                } else {
+                    Write-Log "Patch assessment succeeded for Azure Arc Connected Machine '$ServerName'." 'Info' -ToConsole
+                }
             } else {
                 Write-Log "Patch assessment failed for Azure Arc Connected Machine '$ServerName'. Status: $($assessment.Status)" 'Error' -ToConsole
             }
@@ -304,7 +316,11 @@ try {
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
                 if ($install.Status -eq 'Succeeded') {
-                    Write-Log "Patch install succeeded for Azure Arc Connected Machine '$ServerName'." 'Info' -ToConsole
+                    if ($install.Error) {
+                        Write-Log "Patch install succeeded for Azure Arc Connected Machine '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
+                    } else {
+                        Write-Log "Patch install succeeded for Azure Arc Connected Machine '$ServerName'." 'Info' -ToConsole
+                    }
                 } else {
                     Write-Log "Patch install failed for Azure Arc Connected Machine '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
                 }
