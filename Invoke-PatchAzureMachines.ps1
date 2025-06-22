@@ -102,6 +102,35 @@ param (
     [int]$MaxJobs
 )
 
+function Write-Log {
+    <#
+    .SYNOPSIS
+        Write a log entry to the log file and optionally to the console.
+    .PARAMETER Message
+        The log message.
+    .PARAMETER Type
+        The log type: Info, Warn, or Error.
+    .PARAMETER ToConsole
+        If set, also writes to the console.
+    #>
+    param (
+        [string]$Message,
+        [ValidateSet('Info','Warn','Error')][string]$Type = 'Info',
+        [switch]$ToConsole
+    )
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $server = $env:COMPUTERNAME
+    $logLine = "$timestamp $server $Type $Message"
+    Add-Content -Path $LogFilePath -Value $logLine -Encoding UTF8
+    if ($ToConsole) {
+        switch ($Type) {
+            'Error' { Write-Error $logLine }
+            'Warn'  { Write-Warning $logLine }
+            default { Write-Output $logLine }
+        }
+    }
+}
+
 # CSV Mode: process each server in the CSV by calling this script recursively
 if ($PSCmdlet.ParameterSetName -eq 'CSV') {
     if (-not (Test-Path $CSVPath)) {
@@ -184,35 +213,6 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
 if ($AssessOnly -and $InstallOnly) {
     Write-Log "Error: Only one of -AssessOnly or -InstallOnly can be specified at a time." -ToConsole
     exit 1
-}
-
-function Write-Log {
-    <#
-    .SYNOPSIS
-        Write a log entry to the log file and optionally to the console.
-    .PARAMETER Message
-        The log message.
-    .PARAMETER Type
-        The log type: Info, Warn, or Error.
-    .PARAMETER ToConsole
-        If set, also writes to the console.
-    #>
-    param (
-        [string]$Message,
-        [ValidateSet('Info','Warn','Error')][string]$Type = 'Info',
-        [switch]$ToConsole
-    )
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $server = $env:COMPUTERNAME
-    $logLine = "$timestamp $server $Type $Message"
-    Add-Content -Path $LogFilePath -Value $logLine -Encoding UTF8
-    if ($ToConsole) {
-        switch ($Type) {
-            'Error' { Write-Error $logLine }
-            'Warn'  { Write-Warning $logLine }
-            default { Write-Output $logLine }
-        }
-    }
 }
 
 # Ensure log directory exists
