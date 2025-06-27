@@ -182,7 +182,10 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
             # In parallel mode, assign a unique log file for each job
             $jobCount++
             $jobName = "PatchJob-$jobCount-$($row.ServerName)"
-            $jobLogFile = Join-Path -Path 'C:\ProgramData\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
+            $logDir = Split-Path $LogFilePath -Parent
+            $logBase = Split-Path $LogFilePath -Leaf
+            if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+            $jobLogFile = Join-Path -Path $logDir -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
             $paramHash['LogFilePath'] = $jobLogFile
             Write-Log "Starting job: $jobName with params: $($paramHash | Out-String) and log file: $jobLogFile" 'Info' -ToConsole
             $job = Start-Job -Name $jobName -ScriptBlock {
