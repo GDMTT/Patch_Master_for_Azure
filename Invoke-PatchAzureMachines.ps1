@@ -166,39 +166,33 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
             } elseif ($action -eq 'InstallOnly') {
                 $params.InstallOnly = $true
             }
-        # Build argument list for recursive call
-        $argList = @()
+        # Build parameter hashtable for recursive call
+        $paramHash = @{
+        }
         foreach ($key in $params.Keys) {
             $value = $params[$key]
-            if ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
-                foreach ($item in $value) {
-                    $argList += "-$key"
-                    $argList += $item
-                }
-            } elseif ($value -is [switch]) {
-                if ($value) { $argList += "-$key" }
-            } elseif ($null -ne $value -and $value -ne '') {
-                $argList += "-$key"
-                $argList += $value
+            if ($null -eq $value -or $value -eq '') { continue }
+            if ($value -is [boolean]) {
+                if ($value) { $paramHash[$key] = $true }
+            } else {
+                $paramHash[$key] = $value
             }
         }
-        $argString = $argList -join ' '
         if ($Jobs) {
             # In parallel mode, assign a unique log file for each job
             $jobCount++
             $jobName = "PatchJob-$jobCount-$($row.ServerName)"
             $jobLogFile = Join-Path -Path 'C:\ProgramData\GDMTT\Logs' -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
-            $argList = $argList | Where-Object { $_ -notlike "-LogFilePath*" }
-            $argList += "-LogFilePath '$jobLogFile'"
-            Write-Log "Starting job: $jobName with args: $argString and log file: $jobLogFile" 'Info' -ToConsole
+            $paramHash['LogFilePath'] = $jobLogFile
+            Write-Log "Starting job: $jobName with params: $($paramHash | Out-String) and log file: $jobLogFile" 'Info' -ToConsole
             $job = Start-Job -Name $jobName -ScriptBlock {
-                param($scriptPath, $args)
-                & $scriptPath @args
-            } -ArgumentList $PSCommandPath, $argList
+                param($scriptPath, $paramHash)
+                & $scriptPath @paramHash
+            } -ArgumentList $PSCommandPath, $paramHash
             $jobsList += $job
         } else {
-            Write-Log "Processing server $($row.ServerName) in resource group $($row.ResourceGroupName) with args: $argString" 'Info' -ToConsole
-            & $PSCommandPath @argList
+            Write-Log "Processing server $($row.ServerName) in resource group $($row.ResourceGroupName) with params: $($paramHash | Out-String)" 'Info' -ToConsole
+            & $PSCommandPath @paramHash
         }
     }
     # Monitor jobs if Jobs is set
