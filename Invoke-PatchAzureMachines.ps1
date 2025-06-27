@@ -85,6 +85,7 @@ param (
     [Parameter(ParameterSetName='SingleServer')]
     [string]$MaximumDuration = 'PT1H', # Max duration for patching
     [Parameter(ParameterSetName='SingleServer')]
+    [ValidateSet("IfRequired","Always","Never")]
     [string]$RebootSetting = 'IfRequired', # Reboot setting for patching
     [Parameter(ParameterSetName='SingleServer')]
     [ValidateSet("Critical","Security","UpdateRollup","ServicePack","Definition","Updates","FeaturePack","Tools")][string[]]$WindowsClassificationsToInclude = @("Critical","Security","UpdateRollup","ServicePack","Definition","Updates"),
