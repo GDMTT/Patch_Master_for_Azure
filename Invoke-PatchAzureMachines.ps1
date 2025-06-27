@@ -199,6 +199,12 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
     if ($Jobs -and $jobsList.Count -gt 0) {
         Write-Log "Waiting for all jobs to complete..." 'Info' -ToConsole
         while (($jobsList | Where-Object { $_.State -eq 'Running' }).Count -gt 0) {
+            $runningJobs = $jobsList | Where-Object { $_.State -eq 'Running' }
+            $remaining = $runningJobs.Count
+            $statusList = $jobsList | ForEach-Object { "Name: $($_.Name), State: $($_.State)" }
+            Write-Host ("Jobs remaining: $remaining")
+            Write-Host ("Job status:")
+            $statusList | ForEach-Object { Write-Host $_ }
             Start-Sleep -Seconds 5
         }
         $jobsList | Receive-Job -Wait | Out-Null
