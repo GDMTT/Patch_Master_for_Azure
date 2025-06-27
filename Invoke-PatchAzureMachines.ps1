@@ -48,7 +48,7 @@
     - ResourceGroupName: Name of the resource group
     - Action: AssessOnly or InstallOnly
     - MaximumDuration: (optional) e.g. PT1H
-    - RebootSetting: (optional) e.g. IfRequired
+    - RebootSetting: (optional) e.g. IfRequired, Always, Never
     - WindowsClassificationsToInclude: (optional) Comma-separated list
     - LinuxClassificationsToInclude: (optional) Comma-separated list
 
