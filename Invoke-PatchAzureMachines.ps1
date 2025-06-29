@@ -37,21 +37,6 @@
 .PARAMETER CSVPath
     Path to a CSV file containing server patching instructions. If specified, ResourceGroupName and ServerName cannot be used. The CSV columns are: Order, ServerName, ResourceGroupName, Action, MaximumDuration, RebootSetting, WindowsClassificationsToInclude, LinuxClassificationsToInclude.
 
-.CSV FORMAT
-    To use batch mode, create a CSV file with the following header and sample row:
-
-        Order,ServerName,ResourceGroupName,Action,MaximumDuration,RebootSetting,WindowsClassificationsToInclude,LinuxClassificationsToInclude
-        1,MyServer,MyResourceGroup,InstallOnly,PT1H,IfRequired,"Critical,Security,Updates","Critical,Security"
-
-    - Order: (optional) Numeric order for processing
-    - ServerName: Name of the VM or Arc Connected Machine
-    - ResourceGroupName: Name of the resource group
-    - Action: AssessOnly or InstallOnly
-    - MaximumDuration: (optional) e.g. PT1H
-    - RebootSetting: (optional) e.g. IfRequired, Always, Never
-    - WindowsClassificationsToInclude: (optional) Comma-separated list
-    - LinuxClassificationsToInclude: (optional) Comma-separated list
-
 .PARAMETER Jobs
     If specified with CSVPath, processes servers in parallel jobs. Each job has a unique log file.
 
@@ -132,6 +117,92 @@ function Write-Log {
     }
 }
 
+function Write-ResultToCsv {
+    param(
+        [Parameter(Mandatory=$true)]
+        [object]$Result,
+        [Parameter(Mandatory=$true)]
+        [string]$ServerName,
+        [Parameter(Mandatory=$true)]
+        [string]$CsvPath
+    )
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+
+    function Flatten-Object {
+        param([object]$Obj, [string]$Prefix = '')
+        $result = @{}
+        if ($null -eq $Obj) { return $result }
+        $props = $Obj | Get-Member -MemberType Property, NoteProperty | Select-Object -ExpandProperty Name
+        if (-not $props) {
+            # fallback: use all public properties
+            $props = $Obj.PSObject.Properties | Where-Object { $_.MemberType -eq 'Property' -or $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        }
+        foreach ($name in $props) {
+            $value = $Obj.$name
+            $colName = if ($Prefix) { "$Prefix.$name" } else { $name }
+            if ($name -eq 'Patches' -and $value -is [System.Collections.IEnumerable] -and $value.Count -gt 0 -and ($value | Select-Object -First 1).PSObject.Properties['Name']) {
+                # Special handling for PatchInstallationDetail[]: summarize as CSV of patch names
+                $patchNames = $value | ForEach-Object { $_.Name }
+                $result[$colName] = $patchNames -join '; '
+            } elseif ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
+                $result[$colName] = ($value -join '; ')
+            } elseif ($value -is [pscustomobject]) {
+                $nested = Flatten-Object -Obj $value -Prefix $colName
+                foreach ($k in $nested.Keys) { $result[$k] = $nested[$k] }
+            } else {
+                $result[$colName] = $value
+            }
+        }
+        return $result
+    }
+
+    $staticColumns = @('TimeStamp','ServerName')
+    $rows = @()
+    if ($null -eq $Result) {
+        $rows += @{ TimeStamp = $timestamp; ServerName = $ServerName; Status = 'NoResult' }
+    } elseif ($Result -is [System.Collections.IEnumerable] -and -not ($Result -is [string])) {
+        foreach ($item in $Result) {
+            $flat = Flatten-Object -Obj $item
+            $flat['TimeStamp'] = $timestamp
+            $flat['ServerName'] = $ServerName
+            $rows += $flat
+        }
+    } else {
+        $flat = Flatten-Object -Obj $Result
+        $flat['TimeStamp'] = $timestamp
+        $flat['ServerName'] = $ServerName
+        $rows += $flat
+    }
+
+    # Build superset of all columns seen so far
+    $fileExists = Test-Path $CsvPath
+    $existingHeader = $null
+    if ($fileExists) {
+        $existingHeader = (Get-Content -Path $CsvPath -TotalCount 1)
+        $existingColumns = $existingHeader -split ','
+    } else {
+        $existingColumns = @()
+    }
+    $allColumns = $staticColumns + ($rows | ForEach-Object { $_.Keys } | Select-Object -Unique | Where-Object { $_ -notin $staticColumns })
+    if (-not $fileExists -or ($existingHeader -ne ($allColumns -join ','))) {
+        $dir = Split-Path $CsvPath -Parent
+        if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
+        $header = $allColumns -join ','
+        if ($fileExists) {
+            $lines = Get-Content -Path $CsvPath
+            $lines[0] = $header
+            Set-Content -Path $CsvPath -Value $lines -Encoding UTF8
+        } else {
+            Add-Content -Path $CsvPath -Value $header -Encoding UTF8
+        }
+    }
+    foreach ($row in $rows) {
+        $values = foreach ($col in $allColumns) { ($row[$col] -replace '([\r\n,])', ' ') }
+        $line = $values -join ','
+        Add-Content -Path $CsvPath -Value $line -Encoding UTF8
+    }
+}
+
 # CSV Mode: process each server in the CSV by calling this script recursively
 if ($PSCmdlet.ParameterSetName -eq 'CSV') {
     if (-not (Test-Path $CSVPath)) {
@@ -184,7 +255,6 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
             $jobCount++
             $jobName = "PatchJob-$jobCount-$($row.ServerName)"
             $logDir = Split-Path $LogFilePath -Parent
-            $logBase = Split-Path $LogFilePath -Leaf
             if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
             $jobLogFile = Join-Path -Path $logDir -ChildPath ("Invoke-PatchAzureMachines-Job${jobCount}_$($row.ServerName)-$(Get-Date -Format 'yyyyMMdd').log")
             $paramHash['LogFilePath'] = $jobLogFile
@@ -276,6 +346,8 @@ try {
             Write-Log "Running patch assessment for Azure VM '$ServerName'..." 'Info' -ToConsole
             $assessment = Invoke-AzVMPatchAssessment -ResourceGroupName $ResourceGroupName -VMName $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
+            # Log assessment result to Assessment CSV
+            Write-ResultToCsv -Result $assessment -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv'
             if ($assessment.Status -eq 'Succeeded') {
                 if ($assessment.Error) {
                     Write-Log "Patch assessment succeeded for Azure VM '$ServerName' but with warning: $($assessment.Error)" 'Warn' -ToConsole
@@ -298,6 +370,8 @@ try {
             }
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
+                # Log install result to Install CSV
+                Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
                         Write-Log "Patch install succeeded for Azure VM '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
@@ -317,6 +391,8 @@ try {
             Write-Log "Running patch assessment for Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
             $assessment = Invoke-AzConnectedAssessMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
+            # Log assessment result to Assessment CSV
+            Write-ResultToCsv -Result $assessment -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv'
             if ($assessment.Status -eq 'Succeeded') {
                 if ($assessment.Error) {
                     Write-Log "Patch assessment succeeded for Azure Arc Connected Machine '$ServerName' but with warning: $($assessment.Error)" 'Warn' -ToConsole
@@ -338,6 +414,8 @@ try {
             }
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
+                # Log install result to Install CSV
+                Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
                         Write-Log "Patch install succeeded for Azure Arc Connected Machine '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
