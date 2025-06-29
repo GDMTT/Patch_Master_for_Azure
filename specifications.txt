@@ -48,6 +48,12 @@ Logging Requirements:
 - Logs user and Az PowerShell module version at startup.
 - All actions and errors are logged, with human-readable and full error details.
 
+CSV Reporting Requirements (UPDATED):
+- Assessment results are written to: C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv
+- Install results are written to:    C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv
+- Each CSV includes all output properties as columns.
+- The Install CSV lists installed patch names in the Patches column (semicolon-separated).
+
 Examples:
 - Single server: .\Invoke-PatchAzureMachines.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
 - Batch CSV: .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv

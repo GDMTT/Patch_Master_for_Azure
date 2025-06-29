@@ -3,7 +3,7 @@
     Assess and install patches on Azure VMs or Azure Arc Connected Machines, supporting single server or batch CSV processing (including parallel jobs).
 
 .DESCRIPTION
-    This script checks if a specified server is an Azure VM or Azure Arc Connected Machine, then performs patch assessment and/or installation using the appropriate Azure PowerShell commands. It supports both Windows and Linux OS types, allows classification filtering, and logs all actions and outputs. The script can process a single server or a batch of servers from a CSV file. When using a CSV, jobs can be run in parallel, each with a unique log file.
+    This script checks if a specified server is an Azure VM or Azure Arc Connected Machine, then performs patch assessment and/or installation using the appropriate Azure PowerShell commands. It supports both Windows and Linux OS types, allows classification filtering, and logs all actions and outputs. The script can process a single server or a batch of servers from a CSV file. When using a CSV, jobs can be run in parallel, each with a unique log file. Assessment and install results are written to separate CSV files, with all output properties as columns. The install CSV lists installed patch names in the Patches column.
 
 .PARAMETER ResourceGroupName
     The name of the Azure Resource Group containing the server. Used in single server mode.
@@ -52,10 +52,14 @@
 .EXAMPLE
     .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
 
+.OUTPUTS
+    Assessment results: C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv
+    Install results:    C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv
+    Each CSV includes all output properties as columns. The install CSV lists installed patch names in the Patches column (semicolon-separated).
+
 .NOTES
     Author: Your Name
-    Date: 2025-06-20
-
+    Date: 2025-06-29
 #>
 [CmdletBinding(DefaultParameterSetName='SingleServer')]
 param (
@@ -129,27 +133,52 @@ function Write-ResultToCsv {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 
     function Flatten-Object {
+        <#
+        .SYNOPSIS
+            Recursively flattens a PowerShell object (including nested objects and arrays) into a hashtable suitable for CSV output.
+        .DESCRIPTION
+            - Handles nested objects by prefixing property names (e.g., Parent.Child).
+            - Handles arrays by joining values with semicolons.
+            - Special-cases the 'Patches' property to output a semicolon-separated list of patch names.
+            - Skips null objects and returns an empty hashtable.
+        .PARAMETER Obj
+            The object to flatten.
+        .PARAMETER Prefix
+            The prefix to prepend to property names (used for recursion).
+        #>
         param([object]$Obj, [string]$Prefix = '')
         $result = @{}
-        if ($null -eq $Obj) { return $result }
+        if ($null -eq $Obj) { return $result } # Return empty if object is null
+
+        # Get all property names for the object (handles both standard and NoteProperty)
         $props = $Obj | Get-Member -MemberType Property, NoteProperty | Select-Object -ExpandProperty Name
         if (-not $props) {
-            # fallback: use all public properties
+            # Fallback: use all public properties from PSObject if Get-Member returns nothing
             $props = $Obj.PSObject.Properties | Where-Object { $_.MemberType -eq 'Property' -or $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
         }
+
         foreach ($name in $props) {
             $value = $Obj.$name
+            # Build the column name, prefixing if this is a nested property
             $colName = if ($Prefix) { "$Prefix.$name" } else { $name }
+
+            # Special handling for PatchInstallationDetail[]: output patch names as a semicolon-separated string
             if ($name -eq 'Patches' -and $value -is [System.Collections.IEnumerable] -and $value.Count -gt 0 -and ($value | Select-Object -First 1).PSObject.Properties['Name']) {
-                # Special handling for PatchInstallationDetail[]: summarize as CSV of patch names
+                # Extract the Name property from each patch object
                 $patchNames = $value | ForEach-Object { $_.Name }
                 $result[$colName] = $patchNames -join '; '
-            } elseif ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
+            }
+            # If the value is an array (but not a string), join its elements with semicolons
+            elseif ($value -is [System.Collections.IEnumerable] -and -not ($value -is [string])) {
                 $result[$colName] = ($value -join '; ')
-            } elseif ($value -is [pscustomobject]) {
+            }
+            # If the value is a nested object, recursively flatten it and merge the results
+            elseif ($value -is [pscustomobject]) {
                 $nested = Flatten-Object -Obj $value -Prefix $colName
                 foreach ($k in $nested.Keys) { $result[$k] = $nested[$k] }
-            } else {
+            }
+            # Otherwise, just add the value as-is
+            else {
                 $result[$colName] = $value
             }
         }
@@ -388,11 +417,13 @@ try {
         $msg = "[Azure Arc] Name: $($arc.Name) | Location: $($arc.Location) | OS: $osType | Status: $($arc.Status)"
         Write-Log $msg 'Info' -ToConsole
         if (-not $InstallOnly) {
+            # Run patch assessment for Azure Arc Connected Machine
             Write-Log "Running patch assessment for Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
             $assessment = Invoke-AzConnectedAssessMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -ErrorAction SilentlyContinue
             Write-Log "Assessment output: $($assessment | Out-String)" 'Info' -ToConsole
-            # Log assessment result to Assessment CSV
+            # Log assessment result to Assessment CSV (writes all properties as columns)
             Write-ResultToCsv -Result $assessment -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv'
+            # Check assessment status and log accordingly
             if ($assessment.Status -eq 'Succeeded') {
                 if ($assessment.Error) {
                     Write-Log "Patch assessment succeeded for Azure Arc Connected Machine '$ServerName' but with warning: $($assessment.Error)" 'Warn' -ToConsole
@@ -404,18 +435,22 @@ try {
             }
         }
         if (-not $AssessOnly) {
+            # Run patch install for Azure Arc Connected Machine
             Write-Log "Installing patches on Azure Arc Connected Machine '$ServerName'..." 'Info' -ToConsole
             if ($osType -eq 'Windows') {
+                # Windows Arc: install patches with Windows classifications
                 $install = Install-AzConnectedMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -WindowParameterClassificationsToInclude $WindowsClassificationsToInclude -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ErrorAction SilentlyContinue
             } elseif ($osType -eq 'Linux') {
+                # Linux Arc: install patches with Linux classifications
                 $install = Install-AzConnectedMachinePatch -ResourceGroupName $ResourceGroupName -Name $ServerName -LinuxParameterClassificationsToInclude $LinuxClassificationsToInclude -MaximumDuration $MaximumDuration -RebootSetting $RebootSetting -ErrorAction SilentlyContinue
             } else {
                 Write-Log "Unknown OS type for Arc Connected Machine '$ServerName'." 'Warn' -ToConsole
             }
             if ($null -ne $install) {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
-                # Log install result to Install CSV
+                # Log install result to Install CSV (writes all properties as columns, Patches column lists installed patch names)
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
+                # Check install status and log accordingly
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
                         Write-Log "Patch install succeeded for Azure Arc Connected Machine '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
