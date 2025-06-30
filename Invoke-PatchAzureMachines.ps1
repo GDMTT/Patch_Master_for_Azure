@@ -272,9 +272,15 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         }
 
         if ($osType -eq 'Linux') {
-            if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
-        } else {
-            if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
+            if ($row.LinuxClassificationsToInclude) {
+                $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ','
+                $params.WindowsClassificationsToInclude = $null
+            }
+        } elseif ($osType -eq 'Windows') {
+            if ($row.WindowsClassificationsToInclude) {
+                $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ','
+                $params.LinuxClassificationsToInclude = $null
+            }
         }
 
         $action = $row.Action
@@ -417,6 +423,21 @@ try {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
                 # Log install result to Install CSV
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
+                # Log errors if present
+                if ($install.PSObject.Properties['Error'] -and $install.Error) {
+                    # Suppress non-error: only log as error if not the harmless '0 error/s reported.'
+                    $isHarmless = $false
+                    if ($install.Error -is [object]) {
+                        $errCode = $install.Error.Code
+                        $errMsg = $install.Error.Message
+                        if (($errCode -eq 0 -or $errCode -eq '0') -and $errMsg -eq '0 error/s reported.') {
+                            $isHarmless = $true
+                        }
+                    }
+                    if (-not $isHarmless) {
+                        Write-Log "Patch install error for Azure VM '$ServerName': $($install.Error | Out-String)" 'Error' -ToConsole
+                    }
+                }
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
                         Write-Log "Patch install succeeded for Azure VM '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
@@ -426,6 +447,8 @@ try {
                 } else {
                     Write-Log "Patch install failed for Azure VM '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
                 }
+            } else {
+                Write-Log "Patch install command returned no result for Azure VM '$ServerName'." 'Error' -ToConsole
             }
         }
     } elseif ($null -ne $arc) {
@@ -466,6 +489,21 @@ try {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
                 # Log install result to Install CSV (writes all properties as columns, Patches column lists installed patch names)
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
+                # Log errors if present
+                if ($install.PSObject.Properties['Error'] -and $install.Error) {
+                    # Suppress non-error: only log as error if not the harmless '0 error/s reported.'
+                    $isHarmless = $false
+                    if ($install.Error -is [object]) {
+                        $errCode = $install.Error.Code
+                        $errMsg = $install.Error.Message
+                        if (($errCode -eq 0 -or $errCode -eq '0') -and $errMsg -eq '0 error/s reported.') {
+                            $isHarmless = $true
+                        }
+                    }
+                    if (-not $isHarmless) {
+                        Write-Log "Patch install error for Azure Arc Connected Machine '$ServerName': $($install.Error | Out-String)" 'Error' -ToConsole
+                    }
+                }
                 # Check install status and log accordingly
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
@@ -476,6 +514,8 @@ try {
                 } else {
                     Write-Log "Patch install failed for Azure Arc Connected Machine '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
                 }
+            } else {
+                Write-Log "Patch install command returned no result for Azure Arc Connected Machine '$ServerName'." 'Error' -ToConsole
             }
         }
     } else {
