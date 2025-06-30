@@ -259,14 +259,30 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         # Only add parameters if the value is not null or empty
         if ($row.MaximumDuration) { $params.MaximumDuration = $row.MaximumDuration }
         if ($row.RebootSetting) { $params.RebootSetting = $row.RebootSetting }
-        if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
-        if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
-        $action = $row.Action
-            if ($action -eq 'AssessOnly') {
-                $params.AssessOnly = $true
-            } elseif ($action -eq 'InstallOnly') {
-                $params.InstallOnly = $true
+
+        # Determine OS type using Get-AzVM (for Azure VMs only)
+        $osType = $null
+        try {
+            $vmInfo = Get-AzVM -ResourceGroupName $row.ResourceGroupName -Name $row.ServerName -ErrorAction Stop
+            if ($null -ne $vmInfo) {
+                $osType = $vmInfo.StorageProfile.OSDisk.OSType
             }
+        } catch {
+            $osType = $null
+        }
+
+        if ($osType -eq 'Linux') {
+            if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
+        } else {
+            if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
+        }
+
+        $action = $row.Action
+        if ($action -eq 'AssessOnly') {
+            $params.AssessOnly = $true
+        } elseif ($action -eq 'InstallOnly') {
+            $params.InstallOnly = $true
+        }
         # Build parameter hashtable for recursive call
         $paramHash = @{
         }
