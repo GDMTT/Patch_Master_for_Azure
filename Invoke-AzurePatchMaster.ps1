@@ -44,13 +44,14 @@
     If specified with Jobs, limits the number of concurrent jobs to this value.
 
 .EXAMPLE
-    .\Invoke-PatchAzureMachines.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
 
-.EXAMPLE
-    .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv
+    .\Invoke-AzurePatchMaster.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
 
-.EXAMPLE
-    .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
+EXAMPLE
+    .\Invoke-AzurePatchMaster.ps1 -CSVPath .\servers.csv
+
+EXAMPLE
+    .\Invoke-AzurePatchMaster.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
 
 .OUTPUTS
     Assessment results: C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv
@@ -239,9 +240,12 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         exit 1
     }
     $csv = Import-Csv -Path $CSVPath
-    # If Order column exists, sort by it (numeric), else process as is
+    # If Order column exists and has numbers, sort by it numerically; else process as is
     if ($csv | Get-Member -Name 'Order' -MemberType NoteProperty) {
-        $csv = $csv | Sort-Object {[int]($_.Order)}
+        # Only sort if at least one row has a numeric Order value
+        if ($csv | Where-Object { $_.Order -match '^\d+$' }) {
+            $csv = $csv | Sort-Object { [int]($_.Order) }
+        }
     }
     $jobsList = @()
     $jobCount = 0

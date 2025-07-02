@@ -1,8 +1,8 @@
-# Invoke-PatchAzureMachines.ps1
+# Invoke-AzurePatchMaster.ps1
 
 ## Overview
 
-`Invoke-PatchAzureMachines.ps1` is a robust PowerShell script designed to automate patch assessment and installation for both Azure Virtual Machines (VMs) and Azure Arc Connected Machines. It supports both Windows and Linux operating systems, and can be used to patch a single server or process multiple servers in parallel using a CSV file. The script features detailed logging, error handling, and generates comprehensive reports for both assessment and installation operations.
+`Invoke-AzurePatchMaster.ps1` is a robust PowerShell script designed to automate patch assessment and installation for both Azure Virtual Machines (VMs) and Azure Arc Connected Machines. It supports both Windows and Linux operating systems, and can be used to patch a single server or process multiple servers in parallel using a CSV file. The script features detailed logging, error handling, and generates comprehensive reports for both assessment and installation operations.
 
 ## Features
 - Supports both Azure VMs and Azure Arc Connected Machines
@@ -33,13 +33,13 @@ To assess and/or install patches on a single server:
 
 ```powershell
 # Assess and install patches (default)
-.\Invoke-PatchAzureMachines.ps1 -ResourceGroupName "MyResourceGroup" -ServerName "MyVM"
+    .\Invoke-AzurePatchMaster.ps1 -ResourceGroupName "MyResourceGroup" -ServerName "MyVM"
 
 # Assess only
-.\Invoke-PatchAzureMachines.ps1 -ResourceGroupName "MyResourceGroup" -ServerName "MyVM" -AssessOnly
+    .\Invoke-AzurePatchMaster.ps1 -ResourceGroupName "MyResourceGroup" -ServerName "MyVM" -AssessOnly
 
 # Install only
-.\Invoke-PatchAzureMachines.ps1 -ResourceGroupName "MyResourceGroup" -ServerName "MyVM" -InstallOnly
+    .\Invoke-AzurePatchMaster.ps1 -ResourceGroupName "MyResourceGroup" -ServerName "MyVM" -InstallOnly
 ```
 
 You can also specify:
@@ -59,10 +59,10 @@ Example usage:
 
 ```powershell
 # Serial processing
-.\Invoke-PatchAzureMachines.ps1 -CSVPath .\PatchingList.csv
+    .\Invoke-AzurePatchMaster.ps1 -CSVPath .\PatchingList.csv
 
 # Parallel processing (jobs)
-.\Invoke-PatchAzureMachines.ps1 -CSVPath .\PatchingList.csv -Jobs -MaxJobs 3
+    .\Invoke-AzurePatchMaster.ps1 -CSVPath .\PatchingList.csv -Jobs -MaxJobs 3
 ```
 
 Each job in parallel mode gets a unique log file.

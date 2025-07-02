@@ -5,14 +5,14 @@ resource nsgWindows 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
   properties: {
     securityRules: [
       {
-        name: 'Allow-RDP-3389'
+        name: 'Allow-RDP-3369'
         properties: {
           priority: 1001
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '3389'
+          destinationPortRange: '3369'
           sourceAddressPrefix: '*'
           destinationAddressPrefix: '*'
         }
@@ -45,6 +45,9 @@ resource nsgLinux 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
 }
 // main.bicep
 // Deploys 1 to N Windows and/or Linux VMs based on a configuration file
+
+
+
 
 param location string = resourceGroup().location
 param vmConfig object

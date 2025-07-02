@@ -84,5 +84,6 @@ Run in parallel (jobs):
 
 ---
 
-For more details, see the script comments and Docs/Invoke-PatchAzureMachines.md.
+For more details, see the script comments and Docs/Invoke-AzurePatchMaster.md.
+
 
