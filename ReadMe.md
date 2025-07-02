@@ -82,6 +82,10 @@ Run in parallel (jobs):
 - Filtering specific patches is not supported yet.
 - There may be Azure-imposed limits (to be investigated).
 
+## Known Issues
+- The Az powershell commands succeed with the error 
+    "Microsoft.Azure.Management.Compute.Models.ApiError"
+    checking the server manual confrims the succcess full installation. 
 ---
 
 For more details, see the script comments and Docs/Invoke-AzurePatchMaster.md.
