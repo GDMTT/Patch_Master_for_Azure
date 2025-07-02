@@ -425,12 +425,14 @@ try {
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
                 # Log errors if present
                 if ($install.PSObject.Properties['Error'] -and $install.Error) {
-                    # Suppress non-error: only log as error if not the harmless '0 error/s reported.'
+                    # Suppress non-error: only log as error if not a harmless '0 error/s reported' or 'Success' code
                     $isHarmless = $false
                     if ($install.Error -is [object]) {
                         $errCode = $install.Error.Code
                         $errMsg = $install.Error.Message
-                        if (($errCode -eq 0 -or $errCode -eq '0') -and $errMsg -eq '0 error/s reported.') {
+                        # Accept 0, '0', 'Success' (case-insensitive) as harmless codes
+                        if ((($errCode -eq 0 -or $errCode -eq '0' -or ($errCode -is [string] -and $errCode.ToLower() -eq 'success')) `
+                            -and $errMsg -and $errMsg.Trim().ToLower() -eq '0 error/s reported') ) {
                             $isHarmless = $true
                         }
                     }
@@ -491,12 +493,14 @@ try {
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
                 # Log errors if present
                 if ($install.PSObject.Properties['Error'] -and $install.Error) {
-                    # Suppress non-error: only log as error if not the harmless '0 error/s reported.'
+                    # Suppress non-error: only log as error if not a harmless '0 error/s reported' or 'Success' code
                     $isHarmless = $false
                     if ($install.Error -is [object]) {
                         $errCode = $install.Error.Code
                         $errMsg = $install.Error.Message
-                        if (($errCode -eq 0 -or $errCode -eq '0') -and $errMsg -eq '0 error/s reported.') {
+                        # Accept 0, '0', 'Success' (case-insensitive) as harmless codes
+                        if ((($errCode -eq 0 -or $errCode -eq '0' -or ($errCode -is [string] -and $errCode.ToLower() -eq 'success')) `
+                            -and $errMsg -and $errMsg.Trim().ToLower() -eq '0 error/s reported') ) {
                             $isHarmless = $true
                         }
                     }
