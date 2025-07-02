@@ -44,13 +44,14 @@
     If specified with Jobs, limits the number of concurrent jobs to this value.
 
 .EXAMPLE
-    .\Invoke-PatchAzureMachines.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
 
-.EXAMPLE
-    .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv
+    .\Invoke-AzurePatchMaster.ps1 -ResourceGroupName 'MyRG' -ServerName 'MyVM'
 
-.EXAMPLE
-    .\Invoke-PatchAzureMachines.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
+EXAMPLE
+    .\Invoke-AzurePatchMaster.ps1 -CSVPath .\servers.csv
+
+EXAMPLE
+    .\Invoke-AzurePatchMaster.ps1 -CSVPath .\servers.csv -Jobs -MaxJobs 3
 
 .OUTPUTS
     Assessment results: C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Assessment.csv
@@ -239,9 +240,12 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         exit 1
     }
     $csv = Import-Csv -Path $CSVPath
-    # If Order column exists, sort by it (numeric), else process as is
+    # If Order column exists and has numbers, sort by it numerically; else process as is
     if ($csv | Get-Member -Name 'Order' -MemberType NoteProperty) {
-        $csv = $csv | Sort-Object {[int]($_.Order)}
+        # Only sort if at least one row has a numeric Order value
+        if ($csv | Where-Object { $_.Order -match '^\d+$' }) {
+            $csv = $csv | Sort-Object { [int]($_.Order) }
+        }
     }
     $jobsList = @()
     $jobCount = 0
@@ -259,14 +263,36 @@ if ($PSCmdlet.ParameterSetName -eq 'CSV') {
         # Only add parameters if the value is not null or empty
         if ($row.MaximumDuration) { $params.MaximumDuration = $row.MaximumDuration }
         if ($row.RebootSetting) { $params.RebootSetting = $row.RebootSetting }
-        if ($row.WindowsClassificationsToInclude) { $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ',' }
-        if ($row.LinuxClassificationsToInclude) { $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ',' }
-        $action = $row.Action
-            if ($action -eq 'AssessOnly') {
-                $params.AssessOnly = $true
-            } elseif ($action -eq 'InstallOnly') {
-                $params.InstallOnly = $true
+
+        # Determine OS type using Get-AzVM (for Azure VMs only)
+        $osType = $null
+        try {
+            $vmInfo = Get-AzVM -ResourceGroupName $row.ResourceGroupName -Name $row.ServerName -ErrorAction Stop
+            if ($null -ne $vmInfo) {
+                $osType = $vmInfo.StorageProfile.OSDisk.OSType
             }
+        } catch {
+            $osType = $null
+        }
+
+        if ($osType -eq 'Linux') {
+            if ($row.LinuxClassificationsToInclude) {
+                $params.LinuxClassificationsToInclude = $row.LinuxClassificationsToInclude -split ','
+                $params.WindowsClassificationsToInclude = $null
+            }
+        } elseif ($osType -eq 'Windows') {
+            if ($row.WindowsClassificationsToInclude) {
+                $params.WindowsClassificationsToInclude = $row.WindowsClassificationsToInclude -split ','
+                $params.LinuxClassificationsToInclude = $null
+            }
+        }
+
+        $action = $row.Action
+        if ($action -eq 'AssessOnly') {
+            $params.AssessOnly = $true
+        } elseif ($action -eq 'InstallOnly') {
+            $params.InstallOnly = $true
+        }
         # Build parameter hashtable for recursive call
         $paramHash = @{
         }
@@ -401,6 +427,23 @@ try {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
                 # Log install result to Install CSV
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
+                # Log errors if present
+                if ($install.PSObject.Properties['Error'] -and $install.Error) {
+                    # Suppress non-error: only log as error if not a harmless '0 error/s reported' or 'Success' code
+                    $isHarmless = $false
+                    if ($install.Error -is [object]) {
+                        $errCode = $install.Error.Code
+                        $errMsg = $install.Error.Message
+                        # Accept 0, '0', 'Success' (case-insensitive) as harmless codes
+                        if ((($errCode -eq 0 -or $errCode -eq '0' -or ($errCode -is [string] -and $errCode.ToLower() -eq 'success')) `
+                            -and $errMsg -and $errMsg.Trim().ToLower() -eq '0 error/s reported') ) {
+                            $isHarmless = $true
+                        }
+                    }
+                    if (-not $isHarmless) {
+                        Write-Log "Patch install error for Azure VM '$ServerName': $($install.Error | Out-String)" 'Error' -ToConsole
+                    }
+                }
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
                         Write-Log "Patch install succeeded for Azure VM '$ServerName' but with warning: $($install.Error)" 'Warn' -ToConsole
@@ -410,6 +453,8 @@ try {
                 } else {
                     Write-Log "Patch install failed for Azure VM '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
                 }
+            } else {
+                Write-Log "Patch install command returned no result for Azure VM '$ServerName'." 'Error' -ToConsole
             }
         }
     } elseif ($null -ne $arc) {
@@ -450,6 +495,23 @@ try {
                 Write-Log "Install output: $($install | Out-String)" 'Info' -ToConsole
                 # Log install result to Install CSV (writes all properties as columns, Patches column lists installed patch names)
                 Write-ResultToCsv -Result $install -ServerName $ServerName -CsvPath 'C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv'
+                # Log errors if present
+                if ($install.PSObject.Properties['Error'] -and $install.Error) {
+                    # Suppress non-error: only log as error if not a harmless '0 error/s reported' or 'Success' code
+                    $isHarmless = $false
+                    if ($install.Error -is [object]) {
+                        $errCode = $install.Error.Code
+                        $errMsg = $install.Error.Message
+                        # Accept 0, '0', 'Success' (case-insensitive) as harmless codes
+                        if ((($errCode -eq 0 -or $errCode -eq '0' -or ($errCode -is [string] -and $errCode.ToLower() -eq 'success')) `
+                            -and $errMsg -and $errMsg.Trim().ToLower() -eq '0 error/s reported') ) {
+                            $isHarmless = $true
+                        }
+                    }
+                    if (-not $isHarmless) {
+                        Write-Log "Patch install error for Azure Arc Connected Machine '$ServerName': $($install.Error | Out-String)" 'Error' -ToConsole
+                    }
+                }
                 # Check install status and log accordingly
                 if ($install.Status -eq 'Succeeded') {
                     if ($install.Error) {
@@ -460,6 +522,8 @@ try {
                 } else {
                     Write-Log "Patch install failed for Azure Arc Connected Machine '$ServerName'. Status: $($install.Status)" 'Error' -ToConsole
                 }
+            } else {
+                Write-Log "Patch install command returned no result for Azure Arc Connected Machine '$ServerName'." 'Error' -ToConsole
             }
         }
     } else {
