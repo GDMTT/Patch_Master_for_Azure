@@ -30,8 +30,6 @@ Now that your asleep at your computer here are some of the more intersting detai
 - Manage reboots: IfRequired, Always, Never
 - Maximum duration: Limit the maximum time allowed for installation
 
-## Usage
-
 ### Prerequisites
 - All server must be Azure Virtual Machines or Azure Connected Machines (Azure Arc)
 - Windows PowerShell 5.1
@@ -49,6 +47,8 @@ Now that your asleep at your computer here are some of the more intersting detai
     "Microsoft.Azure.Management.Compute.Models.ApiError"
     checking the server manual confrims the succcess full installation. 
 ---
+
+## Usage
 
 ### Authentication
 Before running the script, authenticate to Azure:
