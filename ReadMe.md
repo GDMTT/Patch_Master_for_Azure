@@ -1,10 +1,18 @@
 # Patch Master for Azure
 
-Patch Master for Azure is a PowerShell-based solution to automate patching for both Windows and Linux servers, supporting Azure Virtual Machines and Azure Arc-connected (on-premises or other cloud) servers. It is designed to be simple, flexible, and easy to use for both single-server and bulk patching scenarios.
+# Back story
 
-## Why?
+Patching is not the most exciting thing to be doing on a Sunday. Having worked with a number of Patching tools over the years, they have all had thier quirks most come with a a price tag that can be quite intimadating. 
 
-Existing tools (SCCM, AWX/Ansible Tower, Batch Patch, etc.) are powerful but often complex or limited in hybrid Azure/on-prem environments. Azure's built-in update features are useful, but advanced patching (especially at scale) can be cumbersome and require extra steps or costs. This script leverages the Az PowerShell modules to provide a unified, scriptable patching workflow for all your servers.
+I have worked with a number of these tools SCCM, BatchPatch, AWX (Ansible Tower), these all have thier stringth and weaknesses. When a coworker mentions he was using the Update features to do patching that triggered the how can I script this brain cell, As most of Azure features have a PowerShell module, az cli commend, and, or API that can be used to interact with them. And so down the rabbit burrow I went. 
+
+While I have coded in other languages in the past (many, many years ago),I do all of my work in PowerShell these days, it's on all windows machines, no setting up needed, use notepad or ISE ship with windows and your on your way. So thats why I have gone with powershell at this point. 
+
+Next the configuration needs to be simple no messing around with brackets, braces and white spaces, so I decided on the .csv file format. Its a straight forward format that can be edited with the same editors as PowerShell or a spreadsheet editor... no names mentioned lol.. When you have a lot of servers to Patch this can simplify things.. And .csv files are well supported in PowerShell. 
+
+The the script itself, need to be self contained. No modules that would need to be updated and as few dependcies as possible. At this time the only dependcies are the official az PowerShell Modules. Download the script configure your .csv and your ready to go. 
+
+Now that your asleep at your computer here are some of the more intersting details.
 
 ## Features
 
@@ -25,7 +33,8 @@ Existing tools (SCCM, AWX/Ansible Tower, Batch Patch, etc.) are powerful but oft
 ## Usage
 
 ### Prerequisites
-- PowerShell 7.x or Windows PowerShell 5.1+
+- All server must be Azure Virtual Machines or Azure Connected Machines (Azure Arc)
+- Windows PowerShell 5.1
 - Az PowerShell module installed
 - Authenticated to Azure (see below)
 
