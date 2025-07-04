@@ -38,6 +38,18 @@ Now that your asleep at your computer here are some of the more intersting detai
 - Az PowerShell module installed
 - Authenticated to Azure (see below)
 
+## Current Limitations
+
+- The script runs under the logged-in Azure account's context and is limited to the current subscription. Use `Set-AzContext` to change the subscription.
+- Filtering specific patches is not supported yet.
+- There may be Azure-imposed limits (to be investigated).
+
+## Known Issues
+- The Az powershell commands succeed with the error 
+    "Microsoft.Azure.Management.Compute.Models.ApiError"
+    checking the server manual confrims the succcess full installation. 
+---
+
 ### Authentication
 Before running the script, authenticate to Azure:
 
@@ -85,17 +97,7 @@ Run in parallel (jobs):
 - Install results: `C:\ProgramData\GDMTT\Reporting\Invoke-PatchAzureMachines-Install.csv`
 - All logs include timestamps, server name, log level (Info, Warn, Error), and detailed messages
 
-## Current Limitations
 
-- The script runs under the logged-in Azure account's context and is limited to the current subscription. Use `Set-AzContext` to change the subscription.
-- Filtering specific patches is not supported yet.
-- There may be Azure-imposed limits (to be investigated).
-
-## Known Issues
-- The Az powershell commands succeed with the error 
-    "Microsoft.Azure.Management.Compute.Models.ApiError"
-    checking the server manual confrims the succcess full installation. 
----
 
 For more details, see the script comments and Docs/Invoke-AzurePatchMaster.md.
 
